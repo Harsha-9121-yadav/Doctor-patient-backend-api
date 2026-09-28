@@ -105,7 +105,7 @@ def get_doctor_api(
 
 
 # =========================
-# UPDATE DOCTOR
+# UPDATE DOCTOR - PUT
 # =========================
 
 @router.put(
@@ -136,7 +136,38 @@ def update_doctor_api(
 
 
 # =========================
-# DELETE DOCTOR
+# PARTIAL UPDATE DOCTOR - PATCH
+# =========================
+
+@router.patch(
+    "/{doctor_id}",
+    response_model=DoctorResponse
+)
+def patch_doctor_api(
+    doctor_id: int,
+    doctor_data: DoctorUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    require_admin(current_user)
+
+    doctor = update_doctor(
+        db,
+        doctor_id,
+        doctor_data
+    )
+
+    if not doctor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Doctor not found"
+        )
+
+    return doctor
+
+
+# =========================
+# DELETE DOCTOR - SOFT DELETE
 # =========================
 
 @router.delete(

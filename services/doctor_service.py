@@ -79,7 +79,7 @@ def update_doctor(
 
 
 # =========================
-# DELETE DOCTOR
+# DELETE DOCTOR - SOFT DELETE
 # =========================
 
 def delete_doctor(
@@ -93,7 +93,9 @@ def delete_doctor(
     if not doctor:
         return None
 
-    db.delete(doctor)
+    doctor.is_active = False
+
     db.commit()
+    db.refresh(doctor)
 
     return doctor
