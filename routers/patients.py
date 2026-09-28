@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Patient, Doctor, DoctorPatient
-from schemas import PatientCreate, PatientResponse
+from schemas import PatientCreate, PatientUpdate, PatientResponse
 
 
 router = APIRouter(
@@ -63,6 +63,39 @@ def get_patient(
             status_code=404,
             detail="Patient not found"
         )
+
+    return patient
+
+
+# -------------------------
+# PATCH Patient
+# -------------------------
+
+@router.patch("/{patient_id}", response_model=PatientResponse)
+def update_patient(
+    patient_id: int,
+    patient_data: PatientUpdate,
+    db: Session = Depends(get_db)
+):
+    patient = db.query(Patient).filter(
+        Patient.id == patient_id
+    ).first()
+
+    if not patient:
+        raise HTTPException(
+            status_code=404,
+            detail="Patient not found"
+        )
+
+    update_data = patient_data.model_dump(
+        exclude_unset=True
+    )
+
+    for key, value in update_data.items():
+        setattr(patient, key, value)
+
+    db.commit()
+    db.refresh(patient)
 
     return patient
 
@@ -128,7 +161,10 @@ def assign_patient(
 # Get Patients of Doctor
 # -------------------------
 
-@router.get("/doctor/{doctor_id}", response_model=list[PatientResponse])
+@router.get(
+    "/doctor/{doctor_id}",
+    response_model=list[PatientResponse]
+)
 def get_doctor_patients(
     doctor_id: int,
     db: Session = Depends(get_db)
