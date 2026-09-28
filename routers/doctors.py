@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User
+from models import User, Doctor
 from schemas import DoctorCreate, DoctorUpdate, DoctorResponse
 
 from auth.security import get_current_user
@@ -55,6 +55,17 @@ def create_doctor_api(
 ):
     require_admin(current_user)
 
+    # Check duplicate email
+    existing_doctor = db.query(Doctor).filter(
+        Doctor.email == doctor_data.email
+    ).first()
+
+    if existing_doctor:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Doctor email already exists"
+        )
+
     return create_doctor(
         db,
         current_user.id,
@@ -64,17 +75,27 @@ def create_doctor_api(
 
 # =========================
 # GET ALL DOCTORS
+# FILTERING + PAGINATION
 # =========================
 
 @router.get(
     "",
-    response_model=list[DoctorResponse]
 )
 def list_doctors(
+    specialization: str = Query(default=None),
+    is_active: bool = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return get_doctors(db)
+    return get_doctors(
+        db,
+        specialization,
+        is_active,
+        page,
+        limit
+    )
 
 
 # =========================
@@ -211,11 +232,42 @@ def assign_patient_to_doctor(
 ):
     require_admin(current_user)
 
-    return assign_patient(
+    assignment, error = assign_patient(
         db,
         doctor_id,
         patient_id
     )
+
+    if error:
+        if error == "Doctor not found":
+            raise HTTPException(
+                status_code=404,
+                detail=error
+            )
+
+        if error == "Patient not found":
+            raise HTTPException(
+                status_code=404,
+                detail=error
+            )
+
+        if error == "Doctor is inactive":
+            raise HTTPException(
+                status_code=400,
+                detail=error
+            )
+
+        if error == "Patient is already assigned to this doctor":
+            raise HTTPException(
+                status_code=400,
+                detail=error
+            )
+
+    return {
+        "message": "Patient assigned to doctor successfully",
+        "doctor_id": doctor_id,
+        "patient_id": patient_id
+    }
 
 
 # =========================

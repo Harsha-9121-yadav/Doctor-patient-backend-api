@@ -26,11 +26,42 @@ def create_patient(
 
 
 # =========================
-# GET ALL PATIENTS
+# GET PATIENTS
+# FILTERING + PAGINATION
 # =========================
 
-def get_patients(db: Session):
-    return db.query(Patient).all()
+def get_patients(
+    db: Session,
+    age_gt: int = None,
+    page: int = 1,
+    limit: int = 10
+):
+    query = db.query(Patient)
+
+    # Age filtering
+    if age_gt is not None:
+        query = query.filter(
+            Patient.age > age_gt
+        )
+
+    # Total records after filtering
+    total = query.count()
+
+    # Pagination
+    offset = (page - 1) * limit
+
+    patients = query.offset(
+        offset
+    ).limit(
+        limit
+    ).all()
+
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "data": patients
+    }
 
 
 # =========================

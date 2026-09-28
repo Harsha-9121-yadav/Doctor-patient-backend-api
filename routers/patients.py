@@ -1,9 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Patient, Doctor, DoctorPatient
+from models import User
 from schemas import PatientCreate, PatientUpdate, PatientResponse
+
+from auth.security import get_current_user
+
+from services.patient_service import (
+    create_patient,
+    get_patients,
+    get_patient,
+    update_patient,
+    delete_patient,
+    assign_patient,
+    get_doctor_patients,
+)
 
 
 router = APIRouter(
@@ -12,143 +24,213 @@ router = APIRouter(
 )
 
 
-# -------------------------
-# Create Patient
-# -------------------------
+# =========================
+# CREATE PATIENT
+# =========================
 
-@router.post("/", response_model=PatientResponse)
-def create_patient(
-    patient: PatientCreate,
-    db: Session = Depends(get_db)
+@router.post(
+    "/",
+    response_model=PatientResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def create_patient_api(
+    patient_data: PatientCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    new_patient = Patient(
-        name=patient.name,
-        age=patient.age,
-        phone=patient.phone
+    return create_patient(
+        db,
+        patient_data
     )
 
-    db.add(new_patient)
-    db.commit()
-    db.refresh(new_patient)
 
-    return new_patient
+# =========================
+# GET PATIENTS
+# FILTERING + PAGINATION
+# =========================
 
-
-# -------------------------
-# Get All Patients
-# -------------------------
-
-@router.get("/", response_model=list[PatientResponse])
-def get_patients(
-    db: Session = Depends(get_db)
+@router.get("/")
+def list_patients(
+    age_gt: int = Query(
+        default=None,
+        gt=0
+    ),
+    page: int = Query(
+        default=1,
+        ge=1
+    ),
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=100
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    return db.query(Patient).all()
+    return get_patients(
+        db,
+        age_gt,
+        page,
+        limit
+    )
 
 
-# -------------------------
-# Get Patient By ID
-# -------------------------
+# =========================
+# GET PATIENT BY ID
+# =========================
 
-@router.get("/{patient_id}", response_model=PatientResponse)
-def get_patient(
+@router.get(
+    "/{patient_id}",
+    response_model=PatientResponse
+)
+def get_patient_api(
     patient_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    patient = db.query(Patient).filter(
-        Patient.id == patient_id
-    ).first()
+    patient = get_patient(
+        db,
+        patient_id
+    )
 
     if not patient:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient not found"
         )
 
     return patient
 
 
-# -------------------------
-# PATCH Patient
-# -------------------------
+# =========================
+# PUT PATIENT
+# =========================
 
-@router.patch("/{patient_id}", response_model=PatientResponse)
-def update_patient(
+@router.put(
+    "/{patient_id}",
+    response_model=PatientResponse
+)
+def update_patient_api(
     patient_id: int,
     patient_data: PatientUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    patient = db.query(Patient).filter(
-        Patient.id == patient_id
-    ).first()
+    patient = update_patient(
+        db,
+        patient_id,
+        patient_data
+    )
 
     if not patient:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient not found"
         )
-
-    update_data = patient_data.model_dump(
-        exclude_unset=True
-    )
-
-    for key, value in update_data.items():
-        setattr(patient, key, value)
-
-    db.commit()
-    db.refresh(patient)
 
     return patient
 
 
-# -------------------------
-# Assign Patient to Doctor
-# -------------------------
+# =========================
+# PATCH PATIENT
+# =========================
 
-@router.post("/{patient_id}/assign/{doctor_id}")
-def assign_patient(
+@router.patch(
+    "/{patient_id}",
+    response_model=PatientResponse
+)
+def patch_patient_api(
     patient_id: int,
-    doctor_id: int,
-    db: Session = Depends(get_db)
+    patient_data: PatientUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    patient = db.query(Patient).filter(
-        Patient.id == patient_id
-    ).first()
+    patient = update_patient(
+        db,
+        patient_id,
+        patient_data
+    )
 
     if not patient:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient not found"
         )
 
-    doctor = db.query(Doctor).filter(
-        Doctor.id == doctor_id
-    ).first()
+    return patient
 
-    if not doctor:
-        raise HTTPException(
-            status_code=404,
-            detail="Doctor not found"
-        )
 
-    existing_assignment = db.query(DoctorPatient).filter(
-        DoctorPatient.patient_id == patient_id,
-        DoctorPatient.doctor_id == doctor_id
-    ).first()
+# =========================
+# DELETE PATIENT
+# =========================
 
-    if existing_assignment:
-        raise HTTPException(
-            status_code=400,
-            detail="Patient is already assigned to this doctor"
-        )
-
-    assignment = DoctorPatient(
-        patient_id=patient_id,
-        doctor_id=doctor_id
+@router.delete(
+    "/{patient_id}"
+)
+def delete_patient_api(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    patient = delete_patient(
+        db,
+        patient_id
     )
 
-    db.add(assignment)
-    db.commit()
-    db.refresh(assignment)
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient not found"
+        )
+
+    return {
+        "message": "Patient deleted successfully"
+    }
+
+
+# =========================
+# ASSIGN PATIENT TO DOCTOR
+# =========================
+
+@router.post(
+    "/{patient_id}/assign/{doctor_id}"
+)
+def assign_patient_api(
+    patient_id: int,
+    doctor_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    assignment, error = assign_patient(
+        db,
+        doctor_id,
+        patient_id
+    )
+
+    if error:
+        if error == "Doctor not found":
+            raise HTTPException(
+                status_code=404,
+                detail=error
+            )
+
+        if error == "Patient not found":
+            raise HTTPException(
+                status_code=404,
+                detail=error
+            )
+
+        if error == "Doctor is inactive":
+            raise HTTPException(
+                status_code=400,
+                detail=error
+            )
+
+        if error == "Patient is already assigned to this doctor":
+            raise HTTPException(
+                status_code=400,
+                detail=error
+            )
 
     return {
         "message": "Patient assigned to doctor successfully",
@@ -157,38 +239,20 @@ def assign_patient(
     }
 
 
-# -------------------------
-# Get Patients of Doctor
-# -------------------------
+# =========================
+# GET PATIENTS OF DOCTOR
+# =========================
 
 @router.get(
     "/doctor/{doctor_id}",
     response_model=list[PatientResponse]
 )
-def get_doctor_patients(
+def get_doctor_patients_api(
     doctor_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    doctor = db.query(Doctor).filter(
-        Doctor.id == doctor_id
-    ).first()
-
-    if not doctor:
-        raise HTTPException(
-            status_code=404,
-            detail="Doctor not found"
-        )
-
-    patients = (
-        db.query(Patient)
-        .join(
-            DoctorPatient,
-            Patient.id == DoctorPatient.patient_id
-        )
-        .filter(
-            DoctorPatient.doctor_id == doctor_id
-        )
-        .all()
+    return get_doctor_patients(
+        db,
+        doctor_id
     )
-
-    return patients

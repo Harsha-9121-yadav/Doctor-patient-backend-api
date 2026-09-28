@@ -27,13 +27,48 @@ def create_doctor(
 
 
 # =========================
-# GET ALL DOCTORS
+# GET DOCTORS
+# FILTERING + PAGINATION
 # =========================
 
 def get_doctors(
-    db: Session
+    db: Session,
+    specialization: str = None,
+    is_active: bool = None,
+    page: int = 1,
+    limit: int = 10
 ):
-    return db.query(Doctor).all()
+    query = db.query(Doctor)
+
+    # Filtering
+    if specialization:
+        query = query.filter(
+            Doctor.specialization == specialization
+        )
+
+    if is_active is not None:
+        query = query.filter(
+            Doctor.is_active == is_active
+        )
+
+    # Total records after filtering
+    total = query.count()
+
+    # Pagination
+    offset = (page - 1) * limit
+
+    doctors = query.offset(
+        offset
+    ).limit(
+        limit
+    ).all()
+
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "data": doctors
+    }
 
 
 # =========================
