@@ -13,21 +13,27 @@ from services.auth_service import (
 )
 
 
+# =========================================================
+# AUTH ROUTER
+# =========================================================
+
 router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
 
 
-# =========================
+# =========================================================
 # REGISTER
-# =========================
+# =========================================================
 
 @router.post("/register")
 def register(
     user_data: UserRegister,
     db: Session = Depends(get_db)
 ):
+
+    # Check username
     existing_user = db.query(User).filter(
         User.username == user_data.username
     ).first()
@@ -38,6 +44,7 @@ def register(
             detail="Username already registered"
         )
 
+    # Check email
     existing_email = db.query(User).filter(
         User.email == user_data.email
     ).first()
@@ -48,8 +55,12 @@ def register(
             detail="Email already registered"
         )
 
-    hashed_password = hash_password(user_data.password)
+    # Hash password
+    hashed_password = hash_password(
+        user_data.password
+    )
 
+    # Create user
     new_user = User(
         username=user_data.username,
         email=user_data.email,
@@ -68,15 +79,20 @@ def register(
     }
 
 
-# =========================
+# =========================================================
 # LOGIN
-# =========================
+# =========================================================
 
-@router.post("/login", response_model=Token)
+@router.post(
+    "/login",
+    response_model=Token
+)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
+
+    # Find user
     user = db.query(User).filter(
         User.username == form_data.username
     ).first()
@@ -87,6 +103,7 @@ def login(
             detail="Invalid username or password"
         )
 
+    # Verify password
     if not verify_password(
         form_data.password,
         user.hashed_password
@@ -96,6 +113,7 @@ def login(
             detail="Invalid username or password"
         )
 
+    # Create JWT token
     access_token = create_access_token(
         data={
             "sub": str(user.id),

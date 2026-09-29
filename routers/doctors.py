@@ -1,16 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Doctor
-from schemas import DoctorCreate, DoctorUpdate, DoctorResponse
+from models import User
+from schemas import (
+    DoctorCreate,
+    DoctorUpdate,
+    DoctorResponse
+)
 
 from auth.security import get_current_user
 
 from services.doctor_service import (
     create_doctor,
     get_doctors,
-    get_doctor,
+    get_doctor_by_id,
     update_doctor,
     delete_doctor,
 )
@@ -27,21 +31,26 @@ router = APIRouter(
 )
 
 
-# =========================
+# =========================================================
 # ADMIN AUTHORIZATION
-# =========================
+# =========================================================
 
-def require_admin(current_user: User):
+def require_admin(
+    current_user: User
+):
+
     if current_user.role != "admin":
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
         )
 
 
-# =========================
+# =========================================================
 # CREATE DOCTOR
-# =========================
+# ADMIN ONLY
+# =========================================================
 
 @router.post(
     "",
@@ -53,54 +62,74 @@ def create_doctor_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
     require_admin(current_user)
 
-    # Check duplicate email
-    existing_doctor = db.query(Doctor).filter(
-        Doctor.email == doctor_data.email
-    ).first()
-
-    if existing_doctor:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Doctor email already exists"
-        )
-
-    return create_doctor(
+    doctor, error = create_doctor(
         db,
-        current_user.id,
-        doctor_data
+        doctor_data,
+        current_user.id
     )
 
+    if error:
 
-# =========================
-# GET ALL DOCTORS
-# FILTERING + PAGINATION
-# =========================
+        if error == "Doctor user not found":
+
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error
+            )
+
+        if error == "Selected user is not a doctor":
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error
+            )
+
+        if error == "Doctor profile already exists for this user":
+
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error
+            )
+
+        if error == "Doctor email already exists":
+
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error
+            )
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
+    return doctor
+
+
+# =========================================================
+# LIST DOCTORS
+# AUTHENTICATED USERS
+# =========================================================
 
 @router.get(
     "",
+    response_model=list[DoctorResponse]
 )
 def list_doctors(
-    specialization: str = Query(default=None),
-    is_active: bool = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return get_doctors(
-        db,
-        specialization,
-        is_active,
-        page,
-        limit
-    )
+
+    return get_doctors(db)
 
 
-# =========================
+# =========================================================
 # GET DOCTOR BY ID
-# =========================
+# AUTHENTICATED USERS
+# =========================================================
 
 @router.get(
     "/{doctor_id}",
@@ -111,12 +140,14 @@ def get_doctor_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    doctor = get_doctor(
+
+    doctor = get_doctor_by_id(
         db,
         doctor_id
     )
 
     if not doctor:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Doctor not found"
@@ -125,9 +156,10 @@ def get_doctor_api(
     return doctor
 
 
-# =========================
-# UPDATE DOCTOR - PUT
-# =========================
+# =========================================================
+# UPDATE DOCTOR
+# ADMIN ONLY
+# =========================================================
 
 @router.put(
     "/{doctor_id}",
@@ -139,15 +171,32 @@ def update_doctor_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
     require_admin(current_user)
 
-    doctor = update_doctor(
+    doctor, error = update_doctor(
         db,
         doctor_id,
-        doctor_data
+        doctor_data,
+        current_user.id
     )
 
+    if error:
+
+        if error == "Doctor email already exists":
+
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error
+            )
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
+
     if not doctor:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Doctor not found"
@@ -156,40 +205,10 @@ def update_doctor_api(
     return doctor
 
 
-# =========================
-# PARTIAL UPDATE DOCTOR - PATCH
-# =========================
-
-@router.patch(
-    "/{doctor_id}",
-    response_model=DoctorResponse
-)
-def patch_doctor_api(
-    doctor_id: int,
-    doctor_data: DoctorUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    require_admin(current_user)
-
-    doctor = update_doctor(
-        db,
-        doctor_id,
-        doctor_data
-    )
-
-    if not doctor:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Doctor not found"
-        )
-
-    return doctor
-
-
-# =========================
-# DELETE DOCTOR - SOFT DELETE
-# =========================
+# =========================================================
+# DELETE DOCTOR
+# ADMIN ONLY
+# =========================================================
 
 @router.delete(
     "/{doctor_id}"
@@ -199,6 +218,7 @@ def delete_doctor_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
     require_admin(current_user)
 
     doctor = delete_doctor(
@@ -207,9 +227,10 @@ def delete_doctor_api(
     )
 
     if not doctor:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Doctor not found"
+            detail="Doctor not found or doctor cannot be deleted"
         )
 
     return {
@@ -217,9 +238,10 @@ def delete_doctor_api(
     }
 
 
-# =========================
+# =========================================================
 # ASSIGN PATIENT TO DOCTOR
-# =========================
+# ADMIN ONLY
+# =========================================================
 
 @router.post(
     "/{doctor_id}/patients/{patient_id}"
@@ -230,6 +252,7 @@ def assign_patient_to_doctor(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
     require_admin(current_user)
 
     assignment, error = assign_patient(
@@ -239,29 +262,11 @@ def assign_patient_to_doctor(
     )
 
     if error:
-        if error == "Doctor not found":
-            raise HTTPException(
-                status_code=404,
-                detail=error
-            )
 
-        if error == "Patient not found":
-            raise HTTPException(
-                status_code=404,
-                detail=error
-            )
-
-        if error == "Doctor is inactive":
-            raise HTTPException(
-                status_code=400,
-                detail=error
-            )
-
-        if error == "Patient is already assigned to this doctor":
-            raise HTTPException(
-                status_code=400,
-                detail=error
-            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
 
     return {
         "message": "Patient assigned to doctor successfully",
@@ -270,9 +275,9 @@ def assign_patient_to_doctor(
     }
 
 
-# =========================
+# =========================================================
 # GET DOCTOR'S PATIENTS
-# =========================
+# =========================================================
 
 @router.get(
     "/{doctor_id}/patients"
@@ -282,6 +287,7 @@ def get_patients_for_doctor(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
     return get_doctor_patients(
         db,
         doctor_id

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User
+from models import User, Doctor, Patient
 from schemas import PatientCreate, PatientUpdate, PatientResponse
 
 from auth.security import get_current_user
@@ -25,7 +25,43 @@ router = APIRouter(
 
 
 # =========================
+# ADMIN CHECK
+# =========================
+
+def require_admin(current_user: User):
+
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+
+
+# =========================
+# GET LOGGED-IN DOCTOR
+# =========================
+
+def get_logged_in_doctor(
+    db: Session,
+    current_user: User
+):
+
+    doctor = db.query(Doctor).filter(
+        Doctor.user_id == current_user.id
+    ).first()
+
+    if not doctor:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Doctor profile not found"
+        )
+
+    return doctor
+
+
+# =========================
 # CREATE PATIENT
+# ADMIN ONLY
 # =========================
 
 @router.post(
@@ -38,15 +74,20 @@ def create_patient_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
+    require_admin(current_user)
+
     return create_patient(
         db,
-        patient_data
+        patient_data,
+        current_user.id
     )
 
 
 # =========================
 # GET PATIENTS
-# FILTERING + PAGINATION
+# ADMIN = ALL
+# DOCTOR = ASSIGNED ONLY
 # =========================
 
 @router.get("/")
@@ -67,11 +108,55 @@ def list_patients(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return get_patients(
-        db,
-        age_gt,
-        page,
-        limit
+
+    # ADMIN
+    if current_user.role == "admin":
+
+        return get_patients(
+            db,
+            age_gt,
+            page,
+            limit
+        )
+
+    # DOCTOR
+    if current_user.role == "doctor":
+
+        doctor = get_logged_in_doctor(
+            db,
+            current_user
+        )
+
+        patients = get_doctor_patients(
+            db,
+            doctor.id
+        )
+
+        if age_gt is not None:
+
+            patients = [
+                patient
+                for patient in patients
+                if patient.age > age_gt
+            ]
+
+        total = len(patients)
+
+        start = (page - 1) * limit
+        end = start + limit
+
+        patients = patients[start:end]
+
+        return {
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "data": patients
+        }
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied"
     )
 
 
@@ -88,22 +173,56 @@ def get_patient_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
     patient = get_patient(
         db,
         patient_id
     )
 
     if not patient:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient not found"
         )
 
-    return patient
+    # ADMIN
+    if current_user.role == "admin":
+        return patient
+
+    # DOCTOR
+    if current_user.role == "doctor":
+
+        doctor = get_logged_in_doctor(
+            db,
+            current_user
+        )
+
+        assigned_patient = db.query(Patient).filter(
+            Patient.id == patient_id,
+            Patient.doctor_assignments.any(
+                Doctor.id == doctor.id
+            )
+        ).first()
+
+        if not assigned_patient:
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your assigned patients"
+            )
+
+        return patient
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied"
+    )
 
 
 # =========================
-# PUT PATIENT
+# UPDATE PATIENT
+# ADMIN ONLY
 # =========================
 
 @router.put(
@@ -116,13 +235,18 @@ def update_patient_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
+    require_admin(current_user)
+
     patient = update_patient(
         db,
         patient_id,
-        patient_data
+        patient_data,
+        current_user.id
     )
 
     if not patient:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient not found"
@@ -133,6 +257,7 @@ def update_patient_api(
 
 # =========================
 # PATCH PATIENT
+# ADMIN ONLY
 # =========================
 
 @router.patch(
@@ -145,13 +270,18 @@ def patch_patient_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
+    require_admin(current_user)
+
     patient = update_patient(
         db,
         patient_id,
-        patient_data
+        patient_data,
+        current_user.id
     )
 
     if not patient:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient not found"
@@ -162,6 +292,7 @@ def patch_patient_api(
 
 # =========================
 # DELETE PATIENT
+# ADMIN ONLY
 # =========================
 
 @router.delete(
@@ -172,12 +303,16 @@ def delete_patient_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
+    require_admin(current_user)
+
     patient = delete_patient(
         db,
         patient_id
     )
 
     if not patient:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient not found"
@@ -190,6 +325,7 @@ def delete_patient_api(
 
 # =========================
 # ASSIGN PATIENT TO DOCTOR
+# ADMIN ONLY
 # =========================
 
 @router.post(
@@ -201,6 +337,9 @@ def assign_patient_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+
+    require_admin(current_user)
+
     assignment, error = assign_patient(
         db,
         doctor_id,
@@ -208,29 +347,32 @@ def assign_patient_api(
     )
 
     if error:
-        if error == "Doctor not found":
-            raise HTTPException(
-                status_code=404,
-                detail=error
-            )
 
-        if error == "Patient not found":
+        if error in [
+            "Doctor not found",
+            "Patient not found"
+        ]:
             raise HTTPException(
-                status_code=404,
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail=error
             )
 
         if error == "Doctor is inactive":
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=error
             )
 
         if error == "Patient is already assigned to this doctor":
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_409_CONFLICT,
                 detail=error
             )
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error
+        )
 
     return {
         "message": "Patient assigned to doctor successfully",
@@ -241,6 +383,7 @@ def assign_patient_api(
 
 # =========================
 # GET PATIENTS OF DOCTOR
+# ADMIN OR SAME DOCTOR
 # =========================
 
 @router.get(
@@ -252,7 +395,36 @@ def get_doctor_patients_api(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return get_doctor_patients(
-        db,
-        doctor_id
+
+    # ADMIN
+    if current_user.role == "admin":
+
+        return get_doctor_patients(
+            db,
+            doctor_id
+        )
+
+    # DOCTOR
+    if current_user.role == "doctor":
+
+        doctor = get_logged_in_doctor(
+            db,
+            current_user
+        )
+
+        if doctor.id != doctor_id:
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own patients"
+            )
+
+        return get_doctor_patients(
+            db,
+            doctor_id
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied"
     )
