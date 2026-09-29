@@ -73,11 +73,90 @@ All main APIs use:
 - `PATCH /api/v1/patients/{patient_id}`
 - `DELETE /api/v1/patients/{patient_id}`
 
+### Appointments
+
+- `POST /api/v1/appointments`
+- `GET /api/v1/appointments`
+- `PUT /api/v1/appointments/{appointment_id}`
+- `DELETE /api/v1/appointments/{appointment_id}`
+
+## Authorization
+
+Protected endpoints require a valid JWT access token.
+
+Admin-only operations include:
+
+- Creating doctors
+- Updating doctors
+- Deleting doctors
+- Assigning patients to doctors
+- Other administrative operations
+
+Unauthorized users receive appropriate HTTP status codes such as:
+
+- `401 Unauthorized`
+- `403 Forbidden`
+- `404 Not Found`
+- `409 Conflict`
+- `422 Unprocessable Content`
+
+## Doctor Management
+
+The Doctor API supports:
+
+- Creating doctors
+- Listing doctors
+- Getting a doctor by ID
+- Updating doctor information
+- Deleting doctors
+- Assigning patients to doctors
+- Viewing patients assigned to a doctor
+
+Doctor profiles are associated with registered users through the user ID.
+
+## Patient Management
+
+The Patient API supports:
+
+- Creating patients
+- Listing patients
+- Getting patients by ID
+- Updating patient information
+- Deleting patients
+- Assigning patients to doctors
+
+## Appointment Management
+
+The Appointment API supports:
+
+- Creating appointments
+- Listing appointments
+- Updating appointments
+- Deleting appointments
+
+Appointments are associated with doctors and patients.
+
+## Swagger Documentation
+
+After starting the application, Swagger documentation is available at:
+
+`http://127.0.0.1:8000/docs`
+
+Alternative API documentation:
+
+`http://127.0.0.1:8000/redoc`
+
+## Running the Application
+
+Create a virtual environment:
+
+```bash
+python -m venv venv
+
 ## Project Structure
 
-```text
 Doctor_Patient_Backend-App/
-│
+
 ├── auth/
 │   ├── __init__.py
 │   └── security.py
@@ -86,16 +165,21 @@ Doctor_Patient_Backend-App/
 │   ├── __init__.py
 │   ├── auth.py
 │   ├── doctors.py
-│   └── patients.py
+│   ├── patients.py
+│   └── appointments.py
 │
 ├── services/
 │   ├── __init__.py
 │   ├── auth_service.py
 │   ├── doctor_service.py
-│   └── patient_service.py
+│   ├── patient_service.py
+│   └── appointment_service.py
 │
 ├── tests/
 │   └── test_api.py
+│
+├── screenshots/
+│   └── API and Swagger screenshots
 │
 ├── config.py
 ├── database.py
@@ -104,5 +188,5 @@ Doctor_Patient_Backend-App/
 ├── main.py
 ├── Dockerfile
 ├── requirements.txt
-├── .env
-└── .gitignore
+├── .gitignore
+└── README.md
