@@ -4,7 +4,9 @@ from sqlalchemy import (
     String,
     Boolean,
     ForeignKey,
-    DateTime
+    DateTime,
+    Float,
+    UniqueConstraint
 )
 
 from sqlalchemy.orm import relationship
@@ -53,10 +55,6 @@ class User(Base):
     )
 
     # User -> Doctor
-    # IMPORTANT:
-    # Explicitly use Doctor.user_id because
-    # Doctor also has created_by and updated_by
-    # pointing to users.id.
     doctor = relationship(
         "Doctor",
         back_populates="user",
@@ -165,6 +163,15 @@ class Doctor(Base):
         cascade="all, delete-orphan"
     )
 
+    # =====================================================
+    # BILLINGS
+    # =====================================================
+
+    billings = relationship(
+        "Billing",
+        back_populates="doctor"
+    )
+
 
 # =========================================================
 # PATIENT
@@ -241,6 +248,15 @@ class Patient(Base):
         "Appointment",
         back_populates="patient",
         cascade="all, delete-orphan"
+    )
+
+    # =====================================================
+    # BILLINGS
+    # =====================================================
+
+    billings = relationship(
+        "Billing",
+        back_populates="patient"
     )
 
 
@@ -372,4 +388,156 @@ class Appointment(Base):
     patient = relationship(
         "Patient",
         back_populates="appointments"
+    )
+
+    # =====================================================
+    # BILLING RELATIONSHIP
+    # =====================================================
+
+    billing = relationship(
+        "Billing",
+        back_populates="appointment",
+        uselist=False
+    )
+
+
+# =========================================================
+# BILLING
+# =========================================================
+
+class Billing(Base):
+    __tablename__ = "billings"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    # =====================================================
+    # PATIENT
+    # =====================================================
+
+    patient_id = Column(
+        Integer,
+        ForeignKey("patients.id"),
+        nullable=False,
+        index=True
+    )
+
+    # =====================================================
+    # DOCTOR
+    # =====================================================
+
+    doctor_id = Column(
+        Integer,
+        ForeignKey("doctors.id"),
+        nullable=False,
+        index=True
+    )
+
+    # =====================================================
+    # APPOINTMENT
+    # Optional relationship
+    # =====================================================
+
+    appointment_id = Column(
+        Integer,
+        ForeignKey("appointments.id"),
+        nullable=True,
+        unique=True,
+        index=True
+    )
+
+    # =====================================================
+    # AMOUNTS
+    # =====================================================
+
+    consultation_fee = Column(
+        Float,
+        nullable=False
+    )
+
+    additional_charges = Column(
+        Float,
+        nullable=False,
+        default=0
+    )
+
+    total_amount = Column(
+        Float,
+        nullable=False
+    )
+
+    # =====================================================
+    # PAYMENT INFORMATION
+    # =====================================================
+
+    payment_status = Column(
+        String(20),
+        nullable=False,
+        default="pending"
+    )
+
+    payment_mode = Column(
+        String(20),
+        nullable=False,
+        default="cash"
+    )
+
+    # =====================================================
+    # SOFT DELETE
+    # =====================================================
+
+    is_active = Column(
+        Boolean,
+        default=True,
+        nullable=False
+    )
+
+    # =====================================================
+    # TIMESTAMPS
+    # =====================================================
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False
+    )
+
+    # =====================================================
+    # RELATIONSHIPS
+    # =====================================================
+
+    patient = relationship(
+        "Patient",
+        back_populates="billings"
+    )
+
+    doctor = relationship(
+        "Doctor",
+        back_populates="billings"
+    )
+
+    appointment = relationship(
+        "Appointment",
+        back_populates="billing"
+    )
+
+    # =====================================================
+    # DATABASE CONSTRAINT
+    # =====================================================
+
+    __table_args__ = (
+        UniqueConstraint(
+            "appointment_id",
+            name="uq_billing_appointment"
+        ),
     )

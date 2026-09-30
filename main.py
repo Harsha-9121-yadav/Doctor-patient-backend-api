@@ -11,7 +11,9 @@ from routers import (
     auth,
     doctors,
     patients,
-    appointments
+    appointments,
+    billings,
+    reports
 )
 
 
@@ -40,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Doctor Patient Backend API",
-    description="Backend application for managing doctors, patients and appointments",
+    description="Backend application for managing doctors, patients, appointments and billings",
     version="1.0.0"
 )
 
@@ -106,6 +108,16 @@ app.include_router(
 
 app.include_router(
     appointments.router,
+    prefix="/api/v1"
+)
+
+app.include_router(
+    billings.router,
+    prefix="/api/v1"
+)
+
+app.include_router(
+    reports.router,
     prefix="/api/v1"
 )
 

@@ -74,35 +74,31 @@ def create_doctor_api(
     if error:
 
         if error == "Doctor user not found":
-
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=404,
                 detail=error
             )
 
         if error == "Selected user is not a doctor":
-
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail=error
             )
 
         if error == "Doctor profile already exists for this user":
-
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
+                status_code=409,
                 detail=error
             )
 
         if error == "Doctor email already exists":
-
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
+                status_code=409,
                 detail=error
             )
 
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail=error
         )
 
@@ -149,7 +145,7 @@ def get_doctor_api(
     if not doctor:
 
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail="Doctor not found"
         )
 
@@ -157,7 +153,7 @@ def get_doctor_api(
 
 
 # =========================================================
-# UPDATE DOCTOR
+# UPDATE DOCTOR - PUT
 # ADMIN ONLY
 # =========================================================
 
@@ -186,19 +182,68 @@ def update_doctor_api(
         if error == "Doctor email already exists":
 
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
+                status_code=409,
                 detail=error
             )
 
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail=error
         )
 
     if not doctor:
 
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
+            detail="Doctor not found"
+        )
+
+    return doctor
+
+
+# =========================================================
+# UPDATE DOCTOR - PATCH
+# ADMIN ONLY
+# =========================================================
+
+@router.patch(
+    "/{doctor_id}",
+    response_model=DoctorResponse
+)
+def patch_doctor_api(
+    doctor_id: int,
+    doctor_data: DoctorUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    require_admin(current_user)
+
+    doctor, error = update_doctor(
+        db,
+        doctor_id,
+        doctor_data,
+        current_user.id
+    )
+
+    if error:
+
+        if error == "Doctor email already exists":
+
+            raise HTTPException(
+                status_code=409,
+                detail=error
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail=error
+        )
+
+    if not doctor:
+
+        raise HTTPException(
+            status_code=404,
             detail="Doctor not found"
         )
 
@@ -229,7 +274,7 @@ def delete_doctor_api(
     if not doctor:
 
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail="Doctor not found or doctor cannot be deleted"
         )
 
@@ -264,7 +309,7 @@ def assign_patient_to_doctor(
     if error:
 
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=400,
             detail=error
         )
 

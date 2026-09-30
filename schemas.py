@@ -49,7 +49,6 @@ class Token(BaseModel):
 
 class DoctorCreate(BaseModel):
 
-    # Username of the doctor login account
     username: str = Field(
         min_length=3,
         max_length=50
@@ -88,15 +87,10 @@ class DoctorUpdate(BaseModel):
 class DoctorResponse(BaseModel):
 
     id: int
-
     user_id: Optional[int]
-
     name: str
-
     specialization: str
-
     email: EmailStr
-
     is_active: bool
 
     class Config:
@@ -181,11 +175,8 @@ class PatientUpdate(BaseModel):
 class PatientResponse(BaseModel):
 
     id: int
-
     name: str
-
     age: int
-
     phone: str
 
     class Config:
@@ -267,14 +258,201 @@ class AppointmentUpdate(BaseModel):
 class AppointmentResponse(BaseModel):
 
     id: int
-
     doctor_id: int
+    patient_id: int
+    appointment_date: datetime
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+# =========================================================
+# BILLING SCHEMAS
+# =========================================================
+
+class BillingCreate(BaseModel):
+
+    patient_id: int = Field(
+        gt=0
+    )
+
+    doctor_id: int = Field(
+        gt=0
+    )
+
+    appointment_id: Optional[int] = Field(
+        default=None,
+        gt=0
+    )
+
+    consultation_fee: float = Field(
+        gt=0
+    )
+
+    additional_charges: float = Field(
+        default=0,
+        ge=0
+    )
+
+    payment_status: str = "pending"
+
+    payment_mode: str = "cash"
+
+    # -----------------------------------------------------
+    # PAYMENT STATUS VALIDATION
+    # -----------------------------------------------------
+
+    @field_validator("payment_status")
+    @classmethod
+    def validate_payment_status(cls, value):
+
+        allowed_statuses = [
+            "pending",
+            "paid",
+            "cancelled"
+        ]
+
+        if value not in allowed_statuses:
+            raise ValueError(
+                "Payment status must be pending, paid, or cancelled"
+            )
+
+        return value
+
+    # -----------------------------------------------------
+    # PAYMENT MODE VALIDATION
+    # -----------------------------------------------------
+
+    @field_validator("payment_mode")
+    @classmethod
+    def validate_payment_mode(cls, value):
+
+        allowed_modes = [
+            "cash",
+            "card",
+            "upi"
+        ]
+
+        if value not in allowed_modes:
+            raise ValueError(
+                "Payment mode must be cash, card, or upi"
+            )
+
+        return value
+
+
+# =========================================================
+# BILLING UPDATE SCHEMA
+# =========================================================
+
+class BillingUpdate(BaseModel):
+
+    patient_id: Optional[int] = Field(
+        default=None,
+        gt=0
+    )
+
+    doctor_id: Optional[int] = Field(
+        default=None,
+        gt=0
+    )
+
+    appointment_id: Optional[int] = Field(
+        default=None,
+        gt=0
+    )
+
+    consultation_fee: Optional[float] = Field(
+        default=None,
+        gt=0
+    )
+
+    additional_charges: Optional[float] = Field(
+        default=None,
+        ge=0
+    )
+
+    payment_status: Optional[str] = None
+
+    payment_mode: Optional[str] = None
+
+    # -----------------------------------------------------
+    # PAYMENT STATUS VALIDATION
+    # -----------------------------------------------------
+
+    @field_validator("payment_status")
+    @classmethod
+    def validate_payment_status(cls, value):
+
+        if value is not None:
+
+            allowed_statuses = [
+                "pending",
+                "paid",
+                "cancelled"
+            ]
+
+            if value not in allowed_statuses:
+                raise ValueError(
+                    "Payment status must be pending, paid, or cancelled"
+                )
+
+        return value
+
+    # -----------------------------------------------------
+    # PAYMENT MODE VALIDATION
+    # -----------------------------------------------------
+
+    @field_validator("payment_mode")
+    @classmethod
+    def validate_payment_mode(cls, value):
+
+        if value is not None:
+
+            allowed_modes = [
+                "cash",
+                "card",
+                "upi"
+            ]
+
+            if value not in allowed_modes:
+                raise ValueError(
+                    "Payment mode must be cash, card, or upi"
+                )
+
+        return value
+
+
+# =========================================================
+# BILLING RESPONSE
+# =========================================================
+
+class BillingResponse(BaseModel):
+
+    id: int
 
     patient_id: int
 
-    appointment_date: datetime
+    doctor_id: int
 
-    status: str
+    appointment_id: Optional[int]
+
+    consultation_fee: float
+
+    additional_charges: float
+
+    total_amount: float
+
+    payment_status: str
+
+    payment_mode: str
+
+    is_active: bool
+
+    created_at: datetime
+
+    updated_at: datetime
 
     class Config:
         from_attributes = True

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User
+
 from schemas import (
     AppointmentCreate,
     AppointmentUpdate,
@@ -35,6 +36,7 @@ router = APIRouter(
 def require_admin(current_user: User):
 
     if current_user.role != "admin":
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
@@ -91,6 +93,11 @@ def create_appointment_api(
                 detail=error
             )
 
+        raise HTTPException(
+            status_code=400,
+            detail=error
+        )
+
     return appointment
 
 
@@ -136,6 +143,7 @@ def get_appointment_api(
     )
 
     if not appointment:
+
         raise HTTPException(
             status_code=404,
             detail="Appointment not found"
@@ -145,7 +153,7 @@ def get_appointment_api(
 
 
 # =========================================================
-# UPDATE APPOINTMENT
+# UPDATE APPOINTMENT - PUT
 # ADMIN ONLY
 # =========================================================
 
@@ -201,6 +209,76 @@ def update_appointment_api(
                 detail=error
             )
 
+        raise HTTPException(
+            status_code=400,
+            detail=error
+        )
+
+    return appointment
+
+
+# =========================================================
+# UPDATE APPOINTMENT - PATCH
+# ADMIN ONLY
+# =========================================================
+
+@router.patch(
+    "/{appointment_id}",
+    response_model=AppointmentResponse
+)
+def patch_appointment_api(
+    appointment_id: int,
+    appointment_data: AppointmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    require_admin(current_user)
+
+    appointment, error = update_appointment(
+        db,
+        appointment_id,
+        appointment_data,
+        current_user.id
+    )
+
+    if error:
+
+        if error == "Appointment not found":
+            raise HTTPException(
+                status_code=404,
+                detail=error
+            )
+
+        if error == "Doctor not found":
+            raise HTTPException(
+                status_code=404,
+                detail=error
+            )
+
+        if error == "Patient not found":
+            raise HTTPException(
+                status_code=404,
+                detail=error
+            )
+
+        if error == "Doctor is inactive":
+            raise HTTPException(
+                status_code=400,
+                detail=error
+            )
+
+        if error == "Doctor already has an appointment at this time":
+            raise HTTPException(
+                status_code=409,
+                detail=error
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail=error
+        )
+
     return appointment
 
 
@@ -226,6 +304,7 @@ def delete_appointment_api(
     )
 
     if not appointment:
+
         raise HTTPException(
             status_code=404,
             detail="Appointment not found"
@@ -268,12 +347,14 @@ def doctor_appointments(
         ).first()
 
         if not doctor:
+
             raise HTTPException(
                 status_code=404,
                 detail="Doctor profile not found"
             )
 
         if doctor.id != doctor_id:
+
             raise HTTPException(
                 status_code=403,
                 detail="You can only view your own appointments"
@@ -326,6 +407,7 @@ def patient_appointments(
         )
 
         if not assigned:
+
             raise HTTPException(
                 status_code=403,
                 detail="You can only view appointments of your assigned patients"
