@@ -136,6 +136,22 @@ The Appointment API supports:
 
 Appointments are associated with doctors and patients.
 
+### Billing Management
+- Create billing record
+- Get all billing records
+- Get billing by ID
+- Update billing using PUT
+- Partial update using PATCH
+- Delete billing
+- Get patient billing records
+- Get doctor billing records
+
+### Reports
+- Revenue report
+- Revenue by doctor
+- Revenue by day
+- Filtering using doctor and date parameters
+
 ## Swagger Documentation
 
 After starting the application, Swagger documentation is available at:
